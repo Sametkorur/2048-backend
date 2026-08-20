@@ -21,17 +21,16 @@ io.on('connection', (socket) => {
         const roomName = data.roomId;
         socket.classType = data.classType;
 
-        // Odadaki kişi sayısına bakıyoruz
         const room = io.sockets.adapter.rooms.get(roomName);
         const numClients = room ? room.size : 0;
 
         if (numClients === 0) {
-            // Odayı sen kurdun, rakibi bekliyorsun
+            // İlk sen girdin, Adem'i bekliyorsun
             socket.join(roomName);
             socket.roomId = roomName;
             socket.emit('waiting', 'Oda Kuruldu. Adem Baba Bekleniyor...');
         } else if (numClients === 1) {
-            // Odaya ikinci kişi (rakip) geldi, savaşı başlat!
+            // İkinci kişi geldi, savaşı başlat
             socket.join(roomName);
             socket.roomId = roomName;
 
@@ -47,8 +46,8 @@ io.on('connection', (socket) => {
             io.to(otherSocket.id).emit('game_start', { role: 'p1', opponentClass: socket.classType });
             io.to(socket.id).emit('game_start', { role: 'p2', opponentClass: otherSocket.classType });
         } else {
-            // Oda doluysa uyarı ver
-            socket.emit('room_full', 'Bu oda numarası şu an dolu!');
+            // Odaya 3. kişi girmeye çalışırsa
+            socket.emit('room_full', 'Bu oda şu an dolu!');
         }
     });
 
@@ -67,5 +66,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Aracı Sunucu Aktif!`);
+    console.log(`Sunucu aktif!`);
 });
