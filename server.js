@@ -14,57 +14,61 @@ const io = new Server(server, {
     }
 });
 
+// Basit ve hatasız kendi oda takip sistemimiz
+const activeRooms = {}; 
+
 io.on('connection', (socket) => {
     console.log('Savaşçı bağlandı:', socket.id);
 
     socket.on('join_room', (data) => {
-        const roomName = data.roomId;
+        const roomId = data.roomId;
         socket.classType = data.classType;
+        socket.roomId = roomId;
 
-        const room = io.sockets.adapter.rooms.get(roomName);
-        const numClients = room ? room.size : 0;
-
-        if (numClients === 0) {
-            // İlk sen girdin, Adem'i bekliyorsun
-            socket.join(roomName);
-            socket.roomId = roomName;
+        if (!activeRooms[roomId]) {
+            // Odayı ilk sen kurdun
+            activeRooms[roomId] = { p1: socket, p2: null };
+            socket.join(roomId);
             socket.emit('waiting', 'Oda Kuruldu. Adem Baba Bekleniyor...');
-        } else if (numClients === 1) {
-            // İkinci kişi geldi, savaşı başlat
-            socket.join(roomName);
-            socket.roomId = roomName;
+        } 
+        else if (activeRooms[roomId].p2 === null) {
+            // Adem odaya geldi (İkinci kişi)
+            activeRooms[roomId].p2 = socket;
+            socket.join(roomId);
 
-            let otherSocketId;
-            for (const id of room) {
-                if (id !== socket.id) {
-                    otherSocketId = id;
-                    break;
-                }
-            }
-            const otherSocket = io.sockets.sockets.get(otherSocketId);
+            const p1Socket = activeRooms[roomId].p1;
 
-            io.to(otherSocket.id).emit('game_start', { role: 'p1', opponentClass: socket.classType });
-            io.to(socket.id).emit('game_start', { role: 'p2', opponentClass: otherSocket.classType });
-        } else {
-            // Odaya 3. kişi girmeye çalışırsa
-            socket.emit('room_full', 'Bu oda şu an dolu!');
+            // Oyunu iki taraf için de BAŞLAT!
+            p1Socket.emit('game_start', { role: 'p1', opponentClass: socket.classType });
+            socket.emit('game_start', { role: 'p2', opponentClass: p1Socket.classType });
+        } 
+        else {
+            // Odaya 3. biri girmeye çalışırsa
+            socket.emit('room_full', 'Bu oda şu an 2 kişiyle dolu!');
         }
     });
 
+    // Hamleleri rakibe ilet
     socket.on('sync_state', (data) => {
         if (socket.roomId) socket.to(socket.roomId).emit('opponent_state', data);
     });
 
+    // Hasarı rakibe ilet
     socket.on('attack_opponent', (data) => {
         if (socket.roomId) socket.to(socket.roomId).emit('receive_attack', data);
     });
 
     socket.on('disconnect', () => {
-        if (socket.roomId) socket.to(socket.roomId).emit('opponent_disconnected');
+        console.log('Savaşçı koptu:', socket.id);
+        if (socket.roomId) {
+            socket.to(socket.roomId).emit('opponent_disconnected');
+            // Biri çıkarsa bug olmasın diye odayı komple kapatıyoruz
+            delete activeRooms[socket.roomId];
+        }
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Sunucu aktif!`);
+    console.log(`Kurşun Geçirmez Aracı Sunucu Aktif!`);
 });
