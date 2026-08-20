@@ -14,28 +14,41 @@ const io = new Server(server, {
     }
 });
 
-let waitingPlayer = null;
-
 io.on('connection', (socket) => {
-    console.log('Bir oyuncu bağlandı:', socket.id);
+    console.log('Savaşçı bağlandı:', socket.id);
 
-    socket.on('join_queue', (data) => {
+    socket.on('join_room', (data) => {
+        const roomName = data.roomId;
         socket.classType = data.classType;
 
-        if (waitingPlayer && waitingPlayer.id !== socket.id) {
-            const roomName = 'room_' + socket.id;
+        // Odadaki kişi sayısına bakıyoruz
+        const room = io.sockets.adapter.rooms.get(roomName);
+        const numClients = room ? room.size : 0;
+
+        if (numClients === 0) {
+            // Odayı sen kurdun, rakibi bekliyorsun
             socket.join(roomName);
-            waitingPlayer.join(roomName);
-
-            io.to(waitingPlayer.id).emit('game_start', { role: 'p1', opponentClass: socket.classType });
-            io.to(socket.id).emit('game_start', { role: 'p2', opponentClass: waitingPlayer.classType });
-
             socket.roomId = roomName;
-            waitingPlayer.roomId = roomName;
-            waitingPlayer = null;
+            socket.emit('waiting', 'Oda Kuruldu. Adem Baba Bekleniyor...');
+        } else if (numClients === 1) {
+            // Odaya ikinci kişi (rakip) geldi, savaşı başlat!
+            socket.join(roomName);
+            socket.roomId = roomName;
+
+            let otherSocketId;
+            for (const id of room) {
+                if (id !== socket.id) {
+                    otherSocketId = id;
+                    break;
+                }
+            }
+            const otherSocket = io.sockets.sockets.get(otherSocketId);
+
+            io.to(otherSocket.id).emit('game_start', { role: 'p1', opponentClass: socket.classType });
+            io.to(socket.id).emit('game_start', { role: 'p2', opponentClass: otherSocket.classType });
         } else {
-            waitingPlayer = socket;
-            socket.emit('waiting', 'Rakip aranıyor...');
+            // Oda doluysa uyarı ver
+            socket.emit('room_full', 'Bu oda numarası şu an dolu!');
         }
     });
 
@@ -48,12 +61,11 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        if (waitingPlayer === socket) waitingPlayer = null;
         if (socket.roomId) socket.to(socket.roomId).emit('opponent_disconnected');
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Sunucu aktif!`);
+    console.log(`Aracı Sunucu Aktif!`);
 });
