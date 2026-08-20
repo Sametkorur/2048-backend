@@ -14,12 +14,10 @@ const io = new Server(server, {
     }
 });
 
-// Basit ve hatasız kendi oda takip sistemimiz
+// Kurşun geçirmez basit oda sistemimiz
 const activeRooms = {}; 
 
 io.on('connection', (socket) => {
-    console.log('Savaşçı bağlandı:', socket.id);
-
     socket.on('join_room', (data) => {
         const roomId = data.roomId;
         socket.classType = data.classType;
@@ -32,37 +30,33 @@ io.on('connection', (socket) => {
             socket.emit('waiting', 'Oda Kuruldu. Adem Baba Bekleniyor...');
         } 
         else if (activeRooms[roomId].p2 === null) {
-            // Adem odaya geldi (İkinci kişi)
+            // Adem odaya geldi
             activeRooms[roomId].p2 = socket;
             socket.join(roomId);
 
             const p1Socket = activeRooms[roomId].p1;
 
-            // Oyunu iki taraf için de BAŞLAT!
+            // İki taraf için de oyunu başlat
             p1Socket.emit('game_start', { role: 'p1', opponentClass: socket.classType });
             socket.emit('game_start', { role: 'p2', opponentClass: p1Socket.classType });
         } 
         else {
-            // Odaya 3. biri girmeye çalışırsa
             socket.emit('room_full', 'Bu oda şu an 2 kişiyle dolu!');
         }
     });
 
-    // Hamleleri rakibe ilet
     socket.on('sync_state', (data) => {
         if (socket.roomId) socket.to(socket.roomId).emit('opponent_state', data);
     });
 
-    // Hasarı rakibe ilet
     socket.on('attack_opponent', (data) => {
         if (socket.roomId) socket.to(socket.roomId).emit('receive_attack', data);
     });
 
     socket.on('disconnect', () => {
-        console.log('Savaşçı koptu:', socket.id);
         if (socket.roomId) {
             socket.to(socket.roomId).emit('opponent_disconnected');
-            // Biri çıkarsa bug olmasın diye odayı komple kapatıyoruz
+            // Biri çıkarsa odayı temizle
             delete activeRooms[socket.roomId];
         }
     });
@@ -70,5 +64,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Kurşun Geçirmez Aracı Sunucu Aktif!`);
+    console.log(`Sunucu Aktif!`);
 });
